@@ -1,0 +1,83 @@
+{
+  "id": "/",
+  "short_name": "Socket.IWA",
+  "name": "Socket.IWA — QUIC Echo Server",
+  "version": "0.1.0",
+  "icons": [
+    {
+      "src": "/images/socket-iwa.png",
+      "type": "image/png",
+      "sizes": "1024x1024",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/socket-iwa.png",
+      "type": "image/png",
+      "sizes": "1024x1024",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/quic.html",
+  "display": "standalone",
+  "display_override": ["tabbed", "borderless"],
+  "scope": "/",
+  "isolated_storage": true,
+  "permissions_policy": {
+    "cross-origin-isolated": ["self"],
+    "direct-sockets": ["self"],
+    "controlled-frame": ["self"],
+    "window-management": ["self"],
+    "all-screens-capture": ["self"]
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+cf",
+      "url": "/cf.html?params=%s"
+    },
+    {
+      "protocol": "cf",
+      "url": "/cf.html?params=%s"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-new"
+  },
+  "tab_strip": {
+    "home_tab": "auto",
+    "new_tab_button": {
+      "url": "/quic.html"
+    }
+  },
+  "shortcuts": [{
+    "name": "QUIC Echo Server",
+    "url": "/quic.html",
+    "icons": [{
+      "src": "/app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }]
+  }, {
+    "name": "Controlled Frame",
+    "url": "/cf.html",
+    "icons": [{
+      "src": "/images/cf.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }]
+  }, {
+    "name": "Direct Sockets",
+    "url": "/",
+    "icons": [{
+      "src": "/images/direct-sockets.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }]
+  }]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "socket-iwa",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:swbn": "KEY_PASSPHRASE=iwa-sink NODE_ENV=production npx vite build",
+    "build:test": "NODE_ENV=development npx vite build --outDir dist-test",
+    "test": "node test-iwa.mjs",
+    "test:real": "node test-iwa-real.mjs",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/w3c-direct-sockets": "^0.0.2",
+    "dotenv": "^16.4.2",
+    "puppeteer": "^24.37.5",
+    "rollup-plugin-webbundle": "^0.2.0",
+    "typescript": "^5.2.2",
+    "vite": "^7.3.1",
+    "vite-plugin-html-inject": "^1.1.2",
+    "wbn-sign": "^0.2.0"
+  }
+}

@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="cert-hash-b64" content="ttOG5NdSKepyCFS8acDeUAPqKLOROz5V2zoC23O9YiU=" />
+    <link rel="icon" type="image/png" sizes="1024x1024" href="/images/socket-iwa.png" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <title>QUIC Echo Server — Socket.IWA</title>
+    <style>
+      /* ── Self-hosted Space Grotesk (IWA can't load external resources) ── */
+      @font-face {
+        font-family: 'Goldman';
+        font-weight: 700;
+        font-display: swap;
+        src: url('/fonts/Goldman-Bold.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'Space Grotesk';
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/SpaceGrotesk-Regular.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'Space Grotesk';
+        font-weight: 500;
+        font-display: swap;
+        src: url('/fonts/SpaceGrotesk-Medium.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'Space Grotesk';
+        font-weight: 600;
+        font-display: swap;
+        src: url('/fonts/SpaceGrotesk-SemiBold.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'Space Grotesk';
+        font-weight: 700;
+        font-display: swap;
+        src: url('/fonts/SpaceGrotesk-Bold.ttf') format('truetype');
+      }
+
+      /* ── Base: stare-material dark theme ── */
+      :root {
+        --bg-deep: #03030a;
+        --bg-panel: rgba(6, 8, 20, 0.85);
+        --bg-glass: rgba(10, 14, 30, 0.65);
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-glass: rgba(151, 179, 255, 0.18);
+        --border-glow: rgba(0, 255, 255, 0.35);
+        --text-primary: #e9f1ff;
+        --text-muted: rgba(227, 237, 255, 0.6);
+        --text-dim: rgba(227, 237, 255, 0.38);
+        --accent-cyan: #0ff;
+        --accent-green: #0f0;
+        --accent-pink: #ff3b8e;
+        --accent-gold: #ffbe18;
+        --accent-red: #ff3333;
+        --accent-warn: #ffd600;
+        --glow-cyan: rgba(0, 255, 255, 0.15);
+        --glow-green: rgba(0, 255, 0, 0.12);
+        --glow-pink: rgba(255, 59, 142, 0.1);
+      }
+
+      body {
+        font-family: 'Space Grotesk', 'Satoshi', 'Helvetica Neue', sans-serif;
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* ── Layered gradient background ── */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        background:
+          radial-gradient(ellipse 60% 50% at 15% 20%, rgba(255, 59, 142, 0.08), transparent),
+          radial-gradient(ellipse 50% 40% at 70% 10%, rgba(0, 255, 255, 0.1), transparent),
+          radial-gradient(ellipse 55% 55% at 30% 80%, rgba(255, 59, 142, 0.06), transparent),
+          linear-gradient(135deg, #0a0a1a 0%, var(--bg-deep) 100%);
+      }
+
+      /* ── Speckle texture overlay ── */
+      body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.06), transparent),
+          radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.04), transparent),
+          radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.05), transparent);
+        background-size: 6px 6px, 14px 14px, 22px 22px;
+        mix-blend-mode: screen;
+        opacity: 0.25;
+        pointer-events: none;
+      }
+
+      /* ── Layout ── */
+      .quic-app {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        gap: clamp(1rem, 2vw, 2rem);
+        padding: 0 clamp(1rem, 3vw, 2rem) 2rem;
+      }
+
+      /* ── Header ── */
+      .quic-header {
+        position: relative;
+        padding: clamp(1.5rem, 3vw, 2.5rem) 0 clamp(1rem, 2vw, 1.5rem);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .quic-header::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+        opacity: 0.4;
+      }
+
+      .header-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .header-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(0, 255, 255, 0.12), rgba(255, 59, 142, 0.08));
+        border: 1px solid var(--border-glass);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(12px);
+        animation: icon-float 4s ease-in-out infinite;
+      }
+
+      @keyframes icon-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-3px); }
+      }
+
+      .header-icon--bear {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .bear-icon {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 30%;
+      }
+
+      .eyebrow {
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin: 0;
+      }
+
+      .quic-header h1 {
+        font-family: 'Goldman', 'Space Grotesk', sans-serif;
+        font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+        font-weight: 700;
+        margin: 0.25rem 0 0;
+        line-height: 1.1;
+        letter-spacing: 0.04em;
+        background: linear-gradient(135deg, var(--text-primary), var(--accent-cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .quic-header .subtitle {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin: 0.5rem 0 0;
+        max-width: 36rem;
+      }
+
+      /* ── Nav ── */
+      .quic-nav {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .quic-nav a {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: lowercase;
+        color: var(--text-muted);
+        text-decoration: none;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: transparent;
+        transition: all 0.2s ease;
+      }
+
+      .quic-nav a:hover {
+        color: var(--text-primary);
+        border-color: var(--border-glass);
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .quic-nav a.active {
+        color: var(--accent-cyan);
+        border-color: var(--border-glow);
+        background: var(--glow-cyan);
+      }
+
+      /* ── Glass Panel Base ── */
+      .glass-panel {
+        background: var(--bg-glass);
+        backdrop-filter: blur(16px) saturate(1.2);
+        -webkit-backdrop-filter: blur(16px) saturate(1.2);
+        border: 1px solid var(--border-glass);
+        border-radius: 20px;
+        overflow: hidden;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .glass-panel:hover {
+        border-color: rgba(151, 179, 255, 0.28);
+      }
+
+      /* ── Controls Row ── */
+      .controls-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 0.6rem 1.4rem;
+        border-radius: 10px;
+        border: 1px solid var(--border-glass);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        background: radial-gradient(circle at center, rgba(255,255,255,0.15), transparent 70%);
+        transition: opacity 0.3s ease;
+      }
+
+      .btn:hover::before { opacity: 1; }
+      .btn:active { transform: scale(0.97); }
+
+      .btn-primary {
+        background: linear-gradient(135deg, rgba(0, 255, 255, 0.15), rgba(0, 255, 255, 0.05));
+        color: var(--accent-cyan);
+        border-color: var(--border-glow);
+      }
+
+      .btn-primary:hover {
+        box-shadow: 0 0 20px var(--glow-cyan), inset 0 0 20px rgba(0, 255, 255, 0.05);
+        transform: translateY(-1px);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        border-color: var(--border-subtle);
+      }
+
+      .btn-secondary:hover {
+        color: var(--text-primary);
+        border-color: var(--border-glass);
+      }
+
+      .btn-icon {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .btn-icon svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+      }
+
+      /* ── Status Pill ── */
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        padding: 0.4rem 1rem;
+        border-radius: 999px;
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--border-subtle);
+        transition: all 0.4s ease;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        transition: background 0.3s, box-shadow 0.3s;
+      }
+
+      .status-idle .status-dot {
+        background: #555;
+      }
+
+      .status-idle {
+        color: #888;
+        background: rgba(50, 50, 50, 0.4);
+      }
+
+      .status-loading .status-dot {
+        background: var(--accent-gold);
+        box-shadow: 0 0 8px var(--accent-gold);
+        animation: pulse-dot 1s ease-in-out infinite;
+      }
+
+      .status-loading {
+        color: var(--accent-gold);
+        background: rgba(255, 190, 24, 0.08);
+        border-color: rgba(255, 190, 24, 0.2);
+      }
+
+      .status-running .status-dot {
+        background: var(--accent-green);
+        box-shadow: 0 0 8px var(--accent-green);
+        animation: pulse-dot 2s ease-in-out infinite;
+      }
+
+      .status-running {
+        color: var(--accent-green);
+        background: rgba(0, 255, 0, 0.06);
+        border-color: rgba(0, 255, 0, 0.2);
+      }
+
+      .status-error .status-dot {
+        background: var(--accent-red);
+        box-shadow: 0 0 8px var(--accent-red);
+      }
+
+      .status-error {
+        color: var(--accent-red);
+        background: rgba(255, 51, 51, 0.08);
+        border-color: rgba(255, 51, 51, 0.2);
+      }
+
+      @keyframes pulse-dot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      /* ── Cert Hash Card ── */
+      .cert-card {
+        display: none;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .cert-card.visible { display: block; }
+
+      .cert-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: var(--accent-gold);
+        margin-bottom: 0.35rem;
+      }
+
+      .cert-value {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        word-break: break-all;
+        line-height: 1.5;
+      }
+
+      .cert-hint {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        margin-top: 0.35rem;
+      }
+
+      /* ── Log Panel ── */
+      .log-container {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .log-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .log-title {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+
+      .log-count {
+        font-size: 0.65rem;
+        color: var(--text-dim);
+        font-family: 'SF Mono', 'Fira Code', monospace;
+      }
+
+      #log {
+        flex: 1;
+        padding: 0.75rem 1.25rem;
+        overflow-y: auto;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.78rem;
+        line-height: 1.65;
+        min-height: 300px;
+        max-height: 55vh;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(151, 179, 255, 0.15) transparent;
+      }
+
+      #log::-webkit-scrollbar { width: 6px; }
+      #log::-webkit-scrollbar-track { background: transparent; }
+      #log::-webkit-scrollbar-thumb {
+        background: rgba(151, 179, 255, 0.15);
+        border-radius: 3px;
+      }
+
+      .log-line {
+        padding: 0.15rem 0;
+        opacity: 0;
+        animation: log-appear 0.2s ease forwards;
+      }
+
+      @keyframes log-appear {
+        from { opacity: 0; transform: translateX(-4px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+
+      .log-ts {
+        color: var(--text-dim);
+        margin-right: 0.5rem;
+        font-size: 0.7rem;
+      }
+
+      .log-info { color: #7ec8e3; }
+      .log-ok   { color: var(--accent-green); }
+      .log-err  { color: var(--accent-red); }
+      .log-warn { color: var(--accent-warn); }
+      .log-dim  { color: #555; }
+
+      /* ── Loading Overlay ── */
+      .loading-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(3, 3, 10, 0.7);
+        backdrop-filter: blur(8px);
+        z-index: 10;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+        border-radius: 20px;
+      }
+
+      .loading-overlay.active {
+        display: flex;
+        animation: fade-in 0.3s ease;
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 2px solid var(--border-glass);
+        border-top-color: var(--accent-cyan);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+      }
+
+      /* ── Scanline overlay (terminal chrome effect) ── */
+      .scanlines {
+        pointer-events: none;
+        position: absolute;
+        inset: 0;
+        border-radius: 20px;
+        overflow: hidden;
+        opacity: 0.03;
+      }
+
+      .scanlines::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 1px,
+          rgba(255, 255, 255, 0.08) 1px,
+          rgba(255, 255, 255, 0.08) 2px
+        );
+      }
+
+      /* ── WebTransport snippet ── */
+      .snippet-panel {
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .snippet-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: var(--accent-cyan);
+        margin-bottom: 0.5rem;
+      }
+
+      .snippet-code {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.75rem;
+        line-height: 1.6;
+        color: var(--text-muted);
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        border: 1px solid var(--border-subtle);
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      .snippet-code .kw { color: var(--accent-pink); }
+      .snippet-code .str { color: var(--accent-green); }
+      .snippet-code .fn { color: #7ec8e3; }
+      .snippet-code .cm { color: var(--text-dim); }
+
+      /* ── Environment cards ── */
+      .env-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .env-card {
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-subtle);
+        transition: all 0.2s ease;
+      }
+
+      .env-card-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 0.25rem;
+      }
+
+      .env-card-value {
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+
+      .env-card-value.ok { color: var(--accent-green); }
+      .env-card-value.warn { color: var(--accent-warn); }
+      .env-card-value.err { color: var(--accent-red); }
+
+      /* ── Main grid layout ── */
+      .quic-main {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: clamp(1rem, 2vw, 1.5rem);
+        flex: 1;
+      }
+
+      @media (min-width: 960px) {
+        .quic-main {
+          grid-template-columns: 1fr 320px;
+        }
+
+        .sidebar { grid-column: 2; grid-row: 1 / 3; }
+      }
+
+      /* ── Sidebar info panels ── */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .info-panel {
+        padding: 1.25rem;
+      }
+
+      .info-panel h3 {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin: 0 0 0.75rem;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        font-size: 0.8rem;
+      }
+
+      .info-row:last-child { border: none; }
+      .info-key { color: var(--text-muted); }
+      .info-val { color: var(--text-primary); font-weight: 500; }
+
+      /* ── Glow border animation for active panel ── */
+      @keyframes glow-border {
+        0%, 100% { border-color: rgba(0, 255, 255, 0.2); }
+        50% { border-color: rgba(0, 255, 255, 0.4); }
+      }
+
+      .glass-panel.active-glow {
+        animation: glow-border 2s ease-in-out infinite;
+        box-shadow: 0 0 30px rgba(0, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+
+      /* ── Streamline emoji icons ── */
+      .emoji-icon {
+        display: inline-block;
+        width: 1.2em;
+        height: 1.2em;
+        vertical-align: -0.15em;
+        flex-shrink: 0;
+      }
+
+      .emoji-icon-lg {
+        width: 1.8em;
+        height: 1.8em;
+        vertical-align: -0.3em;
+      }
+
+      .emoji-icon-xl {
+        width: 2.4em;
+        height: 2.4em;
+      }
+
+      .info-row .emoji-icon {
+        margin-right: 0.4rem;
+      }
+
+      .env-card .emoji-icon {
+        display: block;
+        width: 1.6em;
+        height: 1.6em;
+        margin-bottom: 0.35rem;
+      }
+
+      /* ── Connection counter badge ── */
+      .badge-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--accent-cyan);
+        margin-left: auto;
+      }
+
+      .badge-count {
+        background: var(--glow-cyan);
+        border: 1px solid var(--border-glow);
+        border-radius: 999px;
+        padding: 0.15rem 0.6rem;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.7rem;
+        min-width: 2rem;
+        text-align: center;
+      }
+
+      /* ── IWA Capabilities grid ── */
+      .caps-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+      }
+
+      .cap-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        padding: 0.3rem 0.5rem;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.15);
+        border: 1px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .cap-item.ok {
+        border-color: rgba(0, 255, 0, 0.1);
+        color: var(--accent-green);
+      }
+
+      .cap-item.warn {
+        border-color: rgba(255, 214, 0, 0.1);
+        color: var(--accent-warn);
+      }
+
+      .cap-item.off {
+        opacity: 0.4;
+      }
+
+      .cap-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .cap-item.ok .cap-dot { background: var(--accent-green); }
+      .cap-item.warn .cap-dot { background: var(--accent-warn); }
+      .cap-item.off .cap-dot { background: #555; }
+
+      /* ── Reveal animation on page load ── */
+      .reveal {
+        opacity: 0;
+        transform: translateY(12px);
+        animation: reveal 0.5s ease forwards;
+      }
+
+      .reveal-1 { animation-delay: 0.1s; }
+      .reveal-2 { animation-delay: 0.2s; }
+      .reveal-3 { animation-delay: 0.3s; }
+      .reveal-4 { animation-delay: 0.4s; }
+
+      @keyframes reveal {
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="quic-app">
+
+      <!-- ── Header ── -->
+      <header class="quic-header reveal reveal-1">
+        <div class="header-row">
+          <div class="header-icon header-icon--bear">
+            <img src="/images/bear.png" class="bear-icon" alt="Socket.IWA Bear" />
+          </div>
+          <div>
+            <p class="eyebrow">Socket.IWA</p>
+            <h1>QUIC Echo Server</h1>
+          </div>
+        </div>
+        <p class="subtitle">
+          ngtcp2 + wolfSSL compiled to WebAssembly via Emscripten, using Chrome's Direct Sockets API for real UDP networking — no proxy needed.
+        </p>
+        <nav class="quic-nav">
+          <a href="/">direct sockets</a>
+          <a href="/cf.html">controlled frame</a>
+          <a href="/screencapture.html">screen capture</a>
+          <a href="/oauth.html">oauth flow</a>
+          <a href="/extension.html">extension</a>
+          <a href="/quic.html" class="active">quic server</a>
+        </nav>
+      </header>
+
+      <!-- ── Main Content ── -->
+      <div class="quic-main">
+
+        <!-- ── Primary Panel: Log ── -->
+        <div class="log-container glass-panel reveal reveal-2" style="position: relative;">
+          <div class="scanlines"></div>
+
+          <div class="loading-overlay" id="loading-overlay">
+            <div class="spinner"></div>
+            <div class="loading-text">Initializing QUIC stack...</div>
+          </div>
+
+          <div class="controls-row">
+            <button class="btn btn-primary btn-icon" id="btn-start">
+              <img src="/icons/rocket.svg" class="emoji-icon" alt="" />
+              Start Server
+            </button>
+            <button class="btn btn-secondary btn-icon" id="btn-clear">
+              <img src="/icons/collision.svg" class="emoji-icon" alt="" />
+              Clear
+            </button>
+            <div class="status-pill status-idle" id="status">
+              <span class="status-dot"></span>
+              <span id="status-text">idle</span>
+            </div>
+            <div class="badge-display" id="badge-display" style="display:none;">
+              <img src="/icons/electric-plug.svg" class="emoji-icon" alt="" />
+              <span class="badge-count" id="badge-count">0</span>
+            </div>
+          </div>
+
+          <!-- Environment checks -->
+          <div class="env-grid" id="env-grid"></div>
+
+          <!-- IWA Capabilities -->
+          <div class="caps-grid" id="caps-grid"></div>
+
+          <!-- Cert hash -->
+          <div class="cert-card" id="cert-card">
+            <div class="cert-label">Certificate SHA-256 (base64)</div>
+            <div class="cert-value" id="cert-value"></div>
+            <div class="cert-hint">Use this in WebTransport serverCertificateHashes</div>
+          </div>
+
+          <!-- Log output -->
+          <div class="log-header">
+            <span class="log-title">Output</span>
+            <span class="log-count" id="log-count">0 lines</span>
+          </div>
+          <div id="log"></div>
+        </div>
+
+        <!-- ── Sidebar ── -->
+        <div class="sidebar">
+
+          <!-- Stack info -->
+          <div class="glass-panel info-panel reveal reveal-3">
+            <h3><img src="/icons/bar-chart.svg" class="emoji-icon" alt="" /> Stack</h3>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/speedboat.svg" class="emoji-icon" alt="" /> Transport</span>
+              <span class="info-val">ngtcp2 v1.20</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/locked-with-key.svg" class="emoji-icon" alt="" /> TLS</span>
+              <span class="info-val">wolfSSL 5.7</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/water-wave.svg" class="emoji-icon" alt="" /> HTTP/3</span>
+              <span class="info-val">nghttp3 v1.15</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/robot-face-1.svg" class="emoji-icon" alt="" /> Compiler</span>
+              <span class="info-val">Emscripten 5.0.1</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/electric-plug.svg" class="emoji-icon" alt="" /> Sockets</span>
+              <span class="info-val">Direct Sockets API</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/direct-hit.svg" class="emoji-icon" alt="" /> Port</span>
+              <span class="info-val">UDP 4433</span>
+            </div>
+          </div>
+
+          <!-- Cert info -->
+          <div class="glass-panel info-panel reveal reveal-4">
+            <h3><img src="/icons/graduation-cap.svg" class="emoji-icon" alt="" /> Certificate</h3>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/guard-1.svg" class="emoji-icon" alt="" /> Type</span>
+              <span class="info-val">ECDSA P-256</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/hourglass-not-done-1.svg" class="emoji-icon" alt="" /> Validity</span>
+              <span class="info-val">14 days</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key"><img src="/icons/detective-1.svg" class="emoji-icon" alt="" /> Self-signed</span>
+              <span class="info-val">yes</span>
+            </div>
+          </div>
+
+          <!-- WebTransport snippet -->
+          <div class="glass-panel reveal reveal-4">
+            <div class="snippet-panel">
+              <div class="snippet-label">WebTransport Client</div>
+              <div class="snippet-code"><span class="kw">const</span> wt = <span class="kw">new</span> <span class="fn">WebTransport</span>(url, {
+  serverCertificateHashes: [{
+    algorithm: <span class="str">'sha-256'</span>,
+    value: <span class="fn">Uint8Array</span>.<span class="fn">from</span>(
+      <span class="fn">atob</span>(<span class="str" id="snippet-hash">'...'</span>),
+      c => c.<span class="fn">charCodeAt</span>(0)
+    ).buffer
+  }]
+});
+<span class="kw">await</span> wt.ready;</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/quic.ts"></script>
+  </body>
+</html>
